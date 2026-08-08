@@ -31,16 +31,14 @@ char** tokenize(size_t* token_count, char* buffer, ssize_t* characters_read) {
             in_word = false;
         }
         else if (buffer[i] == '<' || buffer[i] == '>') {
-            static char lt[] = "<";
-            static char gt[] = ">";
-            token_list[token_index++] = (buffer[i] == '<') ? lt : gt; // operator is its own token
+            token_list[token_index++] = (buffer[i] == '<') ? strdup("<") : strdup(">");  // operator is its own token
             if (in_word) {
                 buffer[i] = '\0'; // end current word before the operator
             };
             in_word = false;
         }
         else if (in_word == false) {
-            token_list[token_index++] = &buffer[i]; // start of a new word
+            token_list[token_index++] = strdup(&buffer[i]); // start of a new word
             in_word = true;
         };
     };
@@ -82,7 +80,7 @@ char** tokenize2(char* buffer, ssize_t* characters_read) {
                 capacity *= 2;
                 token_list = realloc(token_list, capacity * sizeof(char*));
             };
-            token_list[token_index++] = &buffer[i]; // start of a new word
+            token_list[token_index++] = strdup(&buffer[i]); // start of a new word
             in_word = true;
         };
     };
@@ -160,7 +158,10 @@ int main(int argc, char** argv) {
                 i++;
             };
 
-            free(tokens);
+            for (int i = 0; tokens[i] != NULL; i++) {
+                free(tokens[i]);
+            };
+            free(tokens);       
             tokens = NULL;
         } else {
             if (feof(stdin)) {
