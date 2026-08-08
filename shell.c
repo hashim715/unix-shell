@@ -31,9 +31,7 @@ char** tokenize(size_t* token_count, char* buffer, ssize_t* characters_read) {
             in_word = false;
         }
         else if (buffer[i] == '<' || buffer[i] == '>') {
-            static char lt[] = "<";
-            static char gt[] = ">";
-            token_list[token_index++] = (buffer[i] == '<') ? lt : gt; // operator is its own token
+            token_list[token_index++] = (buffer[i] == '<') ? strdup("<") : strdup(">"); // operator is its own token
             if (in_word) {
                 buffer[i] = '\0'; // end current word before the operator
             };
@@ -71,9 +69,7 @@ char** tokenize2(char* buffer, ssize_t* characters_read) {
                 capacity *= 2;
                 token_list = realloc(token_list, capacity * sizeof(char*));
             };
-            static char lt[] = "<";
-            static char gt[] = ">";
-            token_list[token_index++] = (buffer[i] == '<') ? lt : gt; // operator is its own token
+            token_list[token_index++] = (buffer[i] == '<') ? strdup("<") : strdup(">"); // operator is its own token
             if (in_word) {
                 buffer[i] = '\0'; // end current word before the operator
             };
