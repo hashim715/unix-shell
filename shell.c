@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 typedef struct {
     char type; // < >
@@ -14,6 +16,95 @@ typedef struct {
     redirect* redirects;
     int redirect_count;
 } cmd;
+
+void run_command(cmd* commands, int cmd_count) {
+    pid_t pids[cmd_count];
+    int pipes[cmd_count - 1][2]; // one pipe (2 fds) between each adjacent pair
+
+    // create all pipes up front, before any forking
+    for (int i = 0; i < cmd_count - 1; i++) {
+        if (pipe(pipes[i]) == -1) {
+            perror("pipe failed");
+            exit(EXIT_FAILURE);
+        };
+    };
+
+    for (int i = 0; i < cmd_count; i++) {
+        // (set up any pipes needed between commands[i-1] and commands[i] here)
+        pids[i] = fork();
+
+        if (pids[i] == 0) {
+            // CHILD for commands[i]
+
+            // if not the first command, stdin comes from the previous pipe's read end
+            if (i > 0) {
+                dup2(pipes[i-1][0], 0);
+            };
+
+            // if not the last command, stdout goes to this pipe's write end
+            if (i < cmd_count - 1) {
+                dup2(pipes[i][1], 1);
+            };
+
+            // close EVERY pipe fd this child inherited — used or not
+            for (int j = 0; j < cmd_count - 1; j++) {
+                close(pipes[j][0]);
+                close(pipes[j][1]);
+            };
+
+            // (redirection handling for commands[i].redirects goes here, after pipe dup2s)
+            for (int j = 0; j < commands[i].redirect_count; j++) {
+                if (commands[i].redirects[j].type == '>') {
+                    int fd = open(commands[i].redirects[j].filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                    if (fd == -1) {
+                        perror("open");
+                        exit(EXIT_FAILURE);
+                    };
+                    dup2(fd, 1); // make stdout (fd 1) point to this file
+                    close(fd); // don't need the original descriptor anymore
+                } else if (commands[i].redirects[j].type == '<') {
+                    int fd = open(commands[i].redirects[j].filename, O_RDONLY);
+                    if (fd == -1) {
+                        perror("open");
+                        exit(EXIT_FAILURE);
+                    };
+                    dup2(fd, 0); // make stdin (fd 0) point to this file
+                    close(fd);
+                };
+            };
+
+            execvp(commands[i].argv[0], commands[i].argv);
+            perror("execvp failed");
+            exit(EXIT_FAILURE);
+        } else if(pids[i] < 0){
+            perror("fork failed");
+
+            // clean up: close all pipe fds in the parent
+            for (int j = 0; j < cmd_count - 1; j++) {
+                close(pipes[j][0]);
+                close(pipes[j][1]);
+            };
+
+            // wait for whichever children were already successfully forked (0 .. i-1)
+            for (int j = 0; j < i; j++) {
+                waitpid(pids[j], NULL, 0);
+            };
+
+            exit(EXIT_FAILURE); // or: return, if you don't want to kill the whole shell
+        };
+    };
+
+    // PARENT: close all pipe fds too — the parent doesn't need any of them,
+    // only the children communicate through them
+    for (int i = 0; i < cmd_count - 1; i++) {
+        close(pipes[i][0]);
+        close(pipes[i][1]);
+    };
+
+    for (int i = 0; i < cmd_count; i++) {
+        waitpid(pids[i], NULL, 0);
+    };
+};
 
 void free_commands(cmd* commands, int built_count) {
     // Free all fully-finished commands (0 .. built_count - 1)
@@ -319,11 +410,6 @@ int main(int argc, char** argv) {
             printf("Characters read: %zd\n", characters_read);
             printf("You entered: %s\n", buffer);
 
-            // size_t total_tokens = count_tokens(buffer, &characters_read);
-
-            // char** tokens = tokenize(&total_tokens, buffer, &characters_read);
-
-
             char** tokens = tokenize(buffer, &characters_read);
 
             if (tokens == NULL) {
@@ -369,6 +455,8 @@ int main(int argc, char** argv) {
                     };
                 };
             };
+
+            run_command(commands, cmd_count);
 
             for (int i = 0; tokens[i] != NULL; i++) {
                 free(tokens[i]);
