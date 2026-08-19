@@ -3,3 +3,5 @@ shell
 *.out
 *.dSYM/
 *.txt
+*wc
+

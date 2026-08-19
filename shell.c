@@ -73,6 +73,12 @@ void run_command(cmd* commands, int cmd_count) {
                 };
             };
 
+            // ADD THIS CHECK:
+            if (commands[i].argv == NULL || commands[i].argv[0] == NULL) {
+                fprintf(stderr, "Empty command\n");
+                exit(EXIT_FAILURE);
+            };
+
             execvp(commands[i].argv[0], commands[i].argv);
             perror("execvp failed");
             exit(EXIT_FAILURE);
@@ -194,6 +200,13 @@ cmd* parse_tokens(char** token_list, int* cmd_count) {
 
             commands[cmd_index].argv[argc] = NULL; // sentinel, like argv
 
+            // ADD THIS CHECK:
+            if (argc == 0) {
+                free_commands_at_malformed(commands, cmd_index, argc, redirect_count);
+                printf("Invalid command: empty command in pipeline\n");
+                return NULL;
+            };
+
             if (cmd_index + 1 >= cmd_capacity) {
                 cmd_capacity *= 2;
                 commands = (cmd*)realloc(commands, cmd_capacity * sizeof(cmd));
@@ -280,6 +293,13 @@ cmd* parse_tokens(char** token_list, int* cmd_count) {
     commands[cmd_index].argv[argc] = NULL; // sentinel, like argv
     commands[cmd_index].argc = argc;
     commands[cmd_index].redirect_count = redirect_count;
+
+    // ADD THIS CHECK:
+    if (argc == 0) {
+        free_commands_at_malformed(commands, cmd_index, argc, redirect_count);
+        printf("Invalid command: empty command in pipeline\n");
+        return NULL;
+    };
 
     *cmd_count = cmd_index + 1;   // <-- add this, count the final command too
 
